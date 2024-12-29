@@ -1,0 +1,81 @@
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext, filters
+
+TOKEN = '7675958058:AAHZlWpWRvKVpASt0Tt73g4rZSXAbjDicls'
+SECRET_KEY = 'MATH270'
+
+# Adminlar va boshqa ma'lumotlarni saqlash
+authorized_admins = set()
+questions = {}
+user_scores = {}
+user_states = {}  # Foydalanuvchi holatini boshqarish uchun
+
+# Telegram bot start function
+async def start(update: Update, context: CallbackContext) -> None:
+    keyboard = [
+        [KeyboardButton("Savol kodi yuborish")],
+        [KeyboardButton("Reytingni ko‘rish")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+    await update.message.reply_text("Salom! Tanlovni tanlang.", reply_markup=reply_markup)
+
+# Adminni tasdiqlash va admin menyusiga o'tish
+async def authorize(update: Update, context: CallbackContext) -> None:
+    if context.args and context.args[0] == SECRET_KEY:
+        authorized_admins.add(update.message.chat_id)
+        await update.message.reply_text("Siz admin sifatida tasdiqlandingiz!")
+        await admin_menu(update, context)
+    else:
+        await update.message.reply_text("Noto‘g‘ri maxfiy kalit. Iltimos, qaytadan urinib ko‘ring.")
+
+# Admin menyusi
+async def admin_menu(update: Update, context: CallbackContext) -> None:
+    if update.message.chat_id in authorized_admins:
+        keyboard = [
+            [KeyboardButton("Savol qo‘shish")],
+            [KeyboardButton("Javob qo‘shish")],
+            [KeyboardButton("Reytingni reset qilish")],
+            [KeyboardButton("Barcha reyting")]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        await update.message.reply_text("Admin menyusi:", reply_markup=reply_markup)
+    else:
+        await update.message.reply_text("Sizga admin huquqi berilmagan! Iltimos, avval maxfiy kalitni kiriting.")
+
+# Savol qo‘shish
+async def add_question(update: Update, context: CallbackContext) -> None:
+    if update.message.chat_id in authorized_admins:
+        await update.message.reply_text("Iltimos, savol uchun rasm yuboring.")
+    else:
+        await update.message.reply_text("Sizga ruxsat berilmagan!")
+
+# Savolni qo‘shish uchun rasmni qabul qilish
+async def receive_question_photo(update: Update, context: CallbackContext) -> None:
+    if update.message.chat_id in authorized_admins:
+        if update.message.photo:
+            question_photo = update.message.photo[-1].file_id
+            question_code = f"q{len(questions) + 1}"
+            questions[question_code] = {"image": question_photo, "answers": [], "attempted_users": set()}
+            await update.message.reply_text(f"Savol qo‘shildi. Kod: {question_code}. Javoblar qo‘shish uchun 'Javob qo‘shish' tugmasidan foydalaning.")
+        else:
+            await update.message.reply_text("Iltimos, savol uchun rasm yuboring.")
+    else:
+        await update.message.reply_text("Sizga ruxsat berilmagan!")
+
+# Asosiy bot funksiyasi
+async def bot_start():
+    application = Application.builder().token(TOKEN).build()
+
+    # Handlerlar
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("authorize", authorize))
+    application.add_handler(MessageHandler(filters.PHOTO, receive_question_photo))
+
+    # Botni ishga tushirish
+    await application.run_polling()
+
+# Start Telegram bot
+if __name__ == "__main__":
+    import asyncio
+    loop = asyncio.get_event_loop()
+    loop.create_task(bot_start())  # Run Telegram bot asynchronously
